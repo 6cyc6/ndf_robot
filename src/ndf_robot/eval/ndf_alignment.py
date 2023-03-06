@@ -1,4 +1,6 @@
 import os, os.path as osp
+from typing import Optional, Any
+
 import torch
 import numpy as np
 import trimesh
@@ -139,6 +141,7 @@ class NDFAlignmentCheck:
     def prepare_inputs(self, pcd1, pcd2):
         pcd1 = pcd1 - np.mean(pcd1, axis=0)
         pcd2 = pcd2 - np.mean(pcd2, axis=0)
+        self.mean2 = np.mean(pcd2, axis=0)
         self.pcd1 = pcd1
         self.pcd2 = pcd2
 
@@ -215,6 +218,8 @@ class NDFAlignmentCheck:
             T_mat = torch_util.angle_axis_to_rotation_matrix(rot).squeeze()
             noise_vec = (torch.randn(X.size()) * (self.perturb_scale / ((i+1)**(self.perturb_decay)))).to(self.dev)
             X_perturbed = X + noise_vec
+            # a = trans - (torch.from_numpy(self.mean2[None, :])).float().to(self.dev)
+            # X_ = torch_util.transform_pcd_torch(X_perturbed, T_mat) + a[:, None, :].repeat((1, X.size(1), 1))
             X_new = torch_util.transform_pcd_torch(X_perturbed, T_mat) + trans[:, None, :].repeat((1, X.size(1), 1))
 
             ######################### stuff for visualizing the reconstruction ##################33
@@ -235,7 +240,7 @@ class NDFAlignmentCheck:
                 shape_pcd = trimesh.PointCloud(shape_np)
                 bb = shape_pcd.bounding_box
                 bb_scene = trimesh.Scene(); bb_scene.add_geometry([shape_pcd, bb]) 
-                # bb_scene.show()
+                bb_scene.show()
 
                 eval_pts = bb.sample_volume(10000)
                 shape_mi['coords'] = torch.from_numpy(eval_pts)[None, :, :].float().to(self.dev).detach()
@@ -250,13 +255,13 @@ class NDFAlignmentCheck:
                     scene = trimesh_util.trimesh_show([in_pts])
                     in_scene = trimesh_util.trimesh_show([in_pts, shape_np])
                 self._cam_frame_scene_dict()
-                plot3d(
-                    [in_pts, shape_np],
-                    ['blue', 'black'], 
-                    osp.join(self.viz_path, 'recon_overlay_test.html'),
-                    scene_dict=self.cam_frame_scene_dict,
-                    z_plane=False)
-
+                fig = plot3d(
+                            [in_pts, shape_np],
+                            ['blue', 'black'],
+                            osp.join(self.viz_path, 'recon_overlay_test.html'),
+                            scene_dict=self.cam_frame_scene_dict,
+                            z_plane=False)
+                fig.show()
             ###############################################################################
 
             act_hat = self.model.forward_latent(opt_latent, X_new)
@@ -307,7 +312,7 @@ class NDFAlignmentCheck:
         best_X = X_new[best_idx].detach().cpu().numpy()
 
         offset = np.array([0.4, 0, 0])
-        vpcd1 = copy.deepcopy(self.pcd1)
+        vpcd1: Optional[Any] = copy.deepcopy(self.pcd1)
         vquery1 = copy.deepcopy(reference_query_pts)
 
         vpcd1 += offset

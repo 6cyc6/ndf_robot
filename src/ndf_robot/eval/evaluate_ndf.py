@@ -407,7 +407,9 @@ def main(args, global_dict):
         obj_pose_world = p.getBasePositionAndOrientation(obj_id)
         obj_pose_world = util.list2pose_stamped(list(obj_pose_world[0]) + list(obj_pose_world[1]))
         viz_dict['start_obj_pose'] = util.pose_stamped2list(obj_pose_world)
-        for i, cam in enumerate(cams.cams): 
+        for i, cam in enumerate(cams.cams):
+            # if i == 2:
+                # break
             # get image and raw point cloud
             rgb, depth, seg = cam.get_images(get_rgb=True, get_depth=True, get_seg=True)
             pts_raw, _ = cam.get_pcd(in_world=True, rgb_image=rgb, depth_image=depth, depth_min=0.0, depth_max=np.inf)

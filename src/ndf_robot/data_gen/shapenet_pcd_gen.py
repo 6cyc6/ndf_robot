@@ -150,7 +150,7 @@ def worker_gen(child_conn, global_dict, worker_flag_dict, seed, worker_id):
                 collifile=obj_file_to_load,
                 base_pos=pos,
                 base_ori=ori,
-                rgba = [0.5, 0.2, 1, 1]) 
+                rgba=[0.5, 0.2, 1, 1])
             p.changeDynamics(obj_id, -1, linearDamping=5, angularDamping=5)
 
             time.sleep(1.5)

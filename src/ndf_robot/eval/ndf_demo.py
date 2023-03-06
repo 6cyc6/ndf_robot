@@ -1,3 +1,5 @@
+import os
+import sys
 import os.path as osp
 import torch
 import numpy as np
@@ -11,6 +13,8 @@ from ndf_robot.utils import path_util
 import ndf_robot.model.vnn_occupancy_net_pointnet_dgcnn as vnn_occupancy_network
 from ndf_robot.eval.ndf_alignment import NDFAlignmentCheck
 
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.join(BASE_DIR))
 
 if __name__ == '__main__':
     parser  = argparse.ArgumentParser()
@@ -61,6 +65,15 @@ if __name__ == '__main__':
 
     pcd1 = mesh1.sample(5000)
     pcd2 = mesh2.sample(5000)  # point cloud representing different shape
+
+    # dir_pcd = BASE_DIR + '/data/scene_5.npz'
+    # data = np.load(dir_pcd, allow_pickle=True)
+    # pcd2 = data["pcd"]
+    # n = pcd2.shape[0]
+    # ids = [i for i in range(n)]
+    # np.random.shuffle(ids)
+    # pcd2 = pcd2[ids][0:5000]
+
     # pcd2 = copy.deepcopy(pcd1)  # debug with the exact same point cloud
     # pcd2 = mesh1.sample(5000)  # debug with same shape but different sampled points
 

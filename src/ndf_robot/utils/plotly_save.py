@@ -150,7 +150,7 @@ def plot3d(pts_list, colors=['black'], fname='default_3d.html',
     #pio.renderers.default = 'png'
 
     if write:
-        #fig.show()
+        # fig.show()
         if fname.endswith('html'):
             fig.write_html(fname)
         else:
