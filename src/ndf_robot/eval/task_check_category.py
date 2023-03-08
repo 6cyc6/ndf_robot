@@ -17,13 +17,19 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(BASE_DIR))
 
 if __name__ == '__main__':
+    # ref_id_1 = 0
+    # ref_id_2 = 73
+    # ref_id_3 = 36
+
     ref_id_1 = 0
-    ref_id_2 = 73
+    ref_id_2 = 50
     ref_id_3 = 36
 
     # load data
-    dir_1 = BASE_DIR + '/data/data_1.npz'
-    dir_2 = BASE_DIR + '/data/data_2.npz'
+    # dir_1 = BASE_DIR + '/data/data_1.npz'
+    # dir_2 = BASE_DIR + '/data/data_2.npz'
+    dir_2 = BASE_DIR + '/data/data_bottle_1.npz'
+    dir_1 = BASE_DIR + '/data/data_bottle_2.npz'
     data_1 = np.load(dir_1, allow_pickle=True)
     data_2 = np.load(dir_2, allow_pickle=True)
     pcd1 = data_1["pcd"]
