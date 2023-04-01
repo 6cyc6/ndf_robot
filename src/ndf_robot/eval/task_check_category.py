@@ -71,6 +71,7 @@ if __name__ == '__main__':
 
     # load model
     model_path = osp.join(path_util.get_ndf_model_weights(), 'ndf_demo_mug_weights.pth')
+    # model_path = osp.join(path_util.get_ndf_model_weights(), 'multi_category_weights.pth')
     model = vnn_occupancy_network.VNNOccNet(latent_dim=256, model_type='pointnet', return_features=True,
                                             sigmoid=True).cuda()
     model.load_state_dict(torch.load(model_path))
