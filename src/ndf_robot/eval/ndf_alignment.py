@@ -22,7 +22,7 @@ class NDFAlignmentCheck:
 
         self.perturb_scale = 0.001
         self.perturb_decay = 0.5
-        self.n_pts =  1500
+        self.n_pts = 1500
         self.n_opt_pts = 500
         self.prepare_inputs(pcd1, pcd2)
 
