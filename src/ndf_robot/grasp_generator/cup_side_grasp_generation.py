@@ -44,68 +44,68 @@ if __name__ == '__main__':
                           [0, -1, 0, 0.94],
                           [0, 0, 0, 1]])
 
-    # for visualization
-    n = 500
-    query_x = np.random.uniform(-0.02, 0.02, n)
-    query_y = np.random.uniform(-0.04, 0.04, n)
-    query_z = np.random.uniform(-0.05 + 0.1, 0.02 + 0.1, n)
-    ones = np.ones(n)
-    ref_pts_gripper = np.vstack([query_x, query_y, query_z])
-    ref_pts_gripper = ref_pts_gripper.T
-    hom_query_pts = np.vstack([query_x, query_y, query_z, ones])
-
-    ref_query_pts = grasp_ref @ hom_query_pts
-    ref_query_pts = ref_query_pts[:3, :]
-    ref_query_pts = ref_query_pts.T
-
-    gripper_control_points = np.array([[0.00000, 0.00000, 0.00000],
-                                       [0.00000, 0.00000, 0.05840],
-                                       [0.05269, -0.00006, 0.05840],
-                                       [0.05269, -0.00006, 0.10527],
-                                       [0.05269, -0.00006, 0.05840],
-                                       [-0.05269, 0.00006, 0.05840],
-                                       [-0.05269, 0.00006, 0.10527]])
-    gripper_control_points_armar = np.array([[0.00000, 0.00000, 0.00000],
-                                             [0.00000, 0.00000, 0.06000],
-                                             [-0.0500, 0.00000, 0.11000],
-                                             [0.07000, 0.00000, 0.13000]])
-    coords = np.concatenate((gripper_control_points, np.ones((7, 1))), axis=1)
-    coords = grasp_ref @ coords.T
-    coords = coords[0:3, :]
-    coords = coords.T
-    nodes = coords
-
-    coords = np.concatenate((gripper_control_points_armar, np.ones((4, 1))), axis=1)
-    coords = grasp_ref @ coords.T
-    coords = coords[0:3, :]
-    coords = coords.T
-    nodes_armar = coords
-
-    ps.init()
-    ps.set_up_dir("z_up")
-    # ps.register_point_cloud("pcd1", pcd1, radius=0.005, color=[1, 0, 0], enabled=True)
-    # ps.register_point_cloud("pcd2", pcd2 + np.array([0.3, 0, 0]), radius=0.005, enabled=True)
-    # ps.register_point_cloud("pcd3", pcd3 + np.array([0.6, 0, 0]), radius=0.005, enabled=True)
-    # ps.register_point_cloud("pcd4", pcd4 + np.array([0.9, 0, 0]), radius=0.005, enabled=True)
-    ps.register_point_cloud("pcd", pcd1, radius=0.005, enabled=True)
-    ps.register_point_cloud("query", ref_query_pts, radius=0.005, enabled=True)
-    # ps.register_curve_network("edge_1", nodes[[0, 1]], np.array([[0, 1]]),
+    # # for visualization
+    # n = 500
+    # query_x = np.random.uniform(-0.02, 0.02, n)
+    # query_y = np.random.uniform(-0.04, 0.04, n)
+    # query_z = np.random.uniform(-0.05 + 0.1, 0.02 + 0.1, n)
+    # ones = np.ones(n)
+    # ref_pts_gripper = np.vstack([query_x, query_y, query_z])
+    # ref_pts_gripper = ref_pts_gripper.T
+    # hom_query_pts = np.vstack([query_x, query_y, query_z, ones])
+    #
+    # ref_query_pts = grasp_ref @ hom_query_pts
+    # ref_query_pts = ref_query_pts[:3, :]
+    # ref_query_pts = ref_query_pts.T
+    #
+    # gripper_control_points = np.array([[0.00000, 0.00000, 0.00000],
+    #                                    [0.00000, 0.00000, 0.05840],
+    #                                    [0.05269, -0.00006, 0.05840],
+    #                                    [0.05269, -0.00006, 0.10527],
+    #                                    [0.05269, -0.00006, 0.05840],
+    #                                    [-0.05269, 0.00006, 0.05840],
+    #                                    [-0.05269, 0.00006, 0.10527]])
+    # gripper_control_points_armar = np.array([[0.00000, 0.00000, 0.00000],
+    #                                          [0.00000, 0.00000, 0.06000],
+    #                                          [-0.0500, 0.00000, 0.11000],
+    #                                          [0.07000, 0.00000, 0.13000]])
+    # coords = np.concatenate((gripper_control_points, np.ones((7, 1))), axis=1)
+    # coords = grasp_ref @ coords.T
+    # coords = coords[0:3, :]
+    # coords = coords.T
+    # nodes = coords
+    #
+    # coords = np.concatenate((gripper_control_points_armar, np.ones((4, 1))), axis=1)
+    # coords = grasp_ref @ coords.T
+    # coords = coords[0:3, :]
+    # coords = coords.T
+    # nodes_armar = coords
+    #
+    # ps.init()
+    # ps.set_up_dir("z_up")
+    # # ps.register_point_cloud("pcd1", pcd1, radius=0.005, color=[1, 0, 0], enabled=True)
+    # # ps.register_point_cloud("pcd2", pcd2 + np.array([0.3, 0, 0]), radius=0.005, enabled=True)
+    # # ps.register_point_cloud("pcd3", pcd3 + np.array([0.6, 0, 0]), radius=0.005, enabled=True)
+    # # ps.register_point_cloud("pcd4", pcd4 + np.array([0.9, 0, 0]), radius=0.005, enabled=True)
+    # ps.register_point_cloud("pcd", pcd1, radius=0.005, enabled=True)
+    # ps.register_point_cloud("query", ref_query_pts, radius=0.005, enabled=True)
+    # # ps.register_curve_network("edge_1", nodes[[0, 1]], np.array([[0, 1]]),
+    # #                           enabled=True, radius=0.0015, color=(0, 0, 1))
+    # # ps.register_curve_network("edge_2", nodes[[2, 5]], np.array([[0, 1]]),
+    # #                           enabled=True, radius=0.0015, color=(0, 0, 1))
+    # # ps.register_curve_network("edge_3", nodes[[2, 3]], np.array([[0, 1]]),
+    # #                           enabled=True, radius=0.0015, color=(1, 0, 0))
+    # # ps.register_curve_network("edge_4", nodes[[5, 6]], np.array([[0, 1]]),
+    # #                           enabled=True, radius=0.0015, color=(0, 1, 0))
+    #
+    # ps.register_curve_network("edge_1", nodes_armar[[0, 1]], np.array([[0, 1]]),
     #                           enabled=True, radius=0.0015, color=(0, 0, 1))
-    # ps.register_curve_network("edge_2", nodes[[2, 5]], np.array([[0, 1]]),
-    #                           enabled=True, radius=0.0015, color=(0, 0, 1))
-    # ps.register_curve_network("edge_3", nodes[[2, 3]], np.array([[0, 1]]),
+    # ps.register_curve_network("edge_2", nodes_armar[[1, 2]], np.array([[0, 1]]),
     #                           enabled=True, radius=0.0015, color=(1, 0, 0))
-    # ps.register_curve_network("edge_4", nodes[[5, 6]], np.array([[0, 1]]),
+    # ps.register_curve_network("edge_3", nodes_armar[[1, 3]], np.array([[0, 1]]),
     #                           enabled=True, radius=0.0015, color=(0, 1, 0))
-
-    ps.register_curve_network("edge_1", nodes_armar[[0, 1]], np.array([[0, 1]]),
-                              enabled=True, radius=0.0015, color=(0, 0, 1))
-    ps.register_curve_network("edge_2", nodes_armar[[1, 2]], np.array([[0, 1]]),
-                              enabled=True, radius=0.0015, color=(1, 0, 0))
-    ps.register_curve_network("edge_3", nodes_armar[[1, 3]], np.array([[0, 1]]),
-                              enabled=True, radius=0.0015, color=(0, 1, 0))
-
-    ps.show()
+    #
+    # ps.show()
 
     # load model
     model_path = osp.join(path_util.get_ndf_model_weights(), 'ndf_demo_mug_weights.pth')

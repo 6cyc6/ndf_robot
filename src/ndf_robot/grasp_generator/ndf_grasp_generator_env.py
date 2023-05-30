@@ -28,7 +28,7 @@ class NDFGraspGeneratorSide:
         self.ref_grasp = ref_grasp
         self.obj_mat = obj_mat
 
-        self.n_samples = 200
+        self.n_samples = 100
         self.m = 4
         self.n_pts = 1500
         self.n_opt_pts = 200
@@ -307,7 +307,19 @@ class NDFGraspGeneratorSide:
             ps.register_curve_network("edge_3" + str(i), nodes_armar[[1, 3]], np.array([[0, 1]]),
                                       enabled=True, radius=0.0015, color=(0, 1, 0))
 
-        ps.register_point_cloud("query", self.query_pts_vis + self.mean1 - np.array([0.3, 0, 0]), radius=0.01, color=[1, 0, 0], enabled=True)
+        coords = np.concatenate((gripper_control_points_armar, np.ones((4, 1))), axis=1)
+        coords = self.ref_grasp @ coords.T
+        coords = coords[0:3, :]
+        coords = coords.T
+        nodes_armar = coords - np.array([0.3, 0, 0])
+        ps.register_curve_network("edge_1_ref", nodes_armar[[0, 1]], np.array([[0, 1]]),
+                                  enabled=True, radius=0.0015, color=(0, 0, 1))
+        ps.register_curve_network("edge_2_ref", nodes_armar[[1, 2]], np.array([[0, 1]]),
+                                  enabled=True, radius=0.0015, color=(1, 0, 0))
+        ps.register_curve_network("edge_3_ref", nodes_armar[[1, 3]], np.array([[0, 1]]),
+                                  enabled=True, radius=0.0015, color=(0, 1, 0))
+
+        ps.register_point_cloud("query", self.query_pts_vis + self.mean1 - np.array([0.3, 0, 0]), radius=0.005, color=[1, 0, 0], enabled=True)
         ps.register_point_cloud("obj1", self.pcd1[:self.n_pts] + self.mean1 - np.array([0.3, 0, 0]), radius=0.005, color=[0.5, 0.5, 0], enabled=True)
         ps.register_point_cloud("obj2", self.pcd_merged[:self.n_pts] + self.pcd_mean_merged, radius=0.005, enabled=True)
 

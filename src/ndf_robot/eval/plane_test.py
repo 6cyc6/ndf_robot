@@ -6,12 +6,9 @@ import time
 import torch
 import numpy as np
 import trimesh
-import random
-import argparse
 import copy
 import polyscope as ps
 import ndf_robot.model.vnn_occupancy_net_pointnet_dgcnn as vnn_occupancy_network
-from scipy.spatial.transform import Rotation
 
 from ndf_robot.utils import path_util, torch_util
 from task_oriented_grasping.utils.path_utils import get_scene_path
@@ -25,8 +22,7 @@ pcd4 = data["pcd_local4"]
 obj_pos = data["obj_pos"]
 obj_quat = data["obj_quat"]
 
-pcd1_mean = np.mean(pcd1, axis=0)
-pcd1 = pcd1 - pcd1_mean
+n_pts = 2000
 
 pcd2_mean = np.mean(pcd2, axis=0)
 pcd2 = pcd2 - pcd2_mean
@@ -40,20 +36,24 @@ hom_pcd2 = np.hstack([pcd2, ones])
 pcd_trans = mat_t @ hom_pcd2.T
 pcd2 = pcd_trans[0:3, :].T
 
+pcd1_mean = np.mean(pcd1, axis=0)
+pcd1 = pcd1 - pcd1_mean
+
 opt_iterations = 500
 # for visualization
-n_pts = 500
-radius = 0.1
-u_th = np.random.rand(n_pts, 1)
-u_r = np.random.rand(n_pts, 1)
+n_pts_gripper = 500
+radius = 0.07
+u_th = np.random.rand(n_pts_gripper, 1)
+u_r = np.random.rand(n_pts_gripper, 1)
 x = radius * np.sqrt(u_r) * np.cos(2 * np.pi * u_th)
 y = radius * np.sqrt(u_r) * np.sin(2 * np.pi * u_th) + 1.1
-z = np.ones((n_pts, 1)) * 0.76
+z = np.random.rand(n_pts_gripper, 1) * 0.01 + 0.76
+# z = np.ones((n_pts, 1)) * 0.76
 ref_query_pts = np.hstack([x, y, z])
 ref_query_pts = ref_query_pts - pcd1_mean
 ref_pts_gripper = ref_query_pts
 
-ones = np.ones((n_pts, 1))
+ones = np.ones((n_pts_gripper, 1))
 ref_query_pts = np.hstack([ref_query_pts, ones])
 trans_ref = mat_t @ ref_query_pts.T
 ref_query_pts = trans_ref[:3, :].T
@@ -73,6 +73,23 @@ loss_fn = torch.nn.L1Loss()
 
 np.random.shuffle(pcd1)
 np.random.shuffle(pcd2)
+
+# # shape completion
+# thresh = 0.2
+# shape = {}
+# shape['point_cloud'] = torch.from_numpy(pcd1[:n_pts]).float().to(dev)[None, :, :]
+# shape_pcd = trimesh.PointCloud(pcd1)
+# bb = shape_pcd.bounding_box
+#
+# eval_pts = bb.sample_volume(20000)
+# shape['coords'] = torch.from_numpy(eval_pts)[None, :, :].float().to(dev).detach()
+# out = model(shape)
+# in_inds = torch.where(out['occ'].squeeze() > thresh)[0].cpu().numpy()
+# in_pts = eval_pts[in_inds]
+#
+# pcd = np.vstack([pcd1, in_pts[:1000]])
+# np.random.shuffle(pcd)
+# pcd1 = pcd
 
 # start optimization
 # get descriptor of the ref grasp of the ref point cloud
