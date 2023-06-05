@@ -26,9 +26,13 @@ n_pts = 2000
 
 pcd2_mean = np.mean(pcd2, axis=0)
 pcd2 = pcd2 - pcd2_mean
+# mat_t = np.array([[1, 0, 0, 0],
+#                   [0, 0, -1, 0],
+#                   [0, 1, 0, 0],
+#                   [0, 0, 0, 1]])
 mat_t = np.array([[1, 0, 0, 0],
+                  [0, -1, 0, 0],
                   [0, 0, -1, 0],
-                  [0, 1, 0, 0],
                   [0, 0, 0, 1]])
 n = pcd2.shape[0]
 ones = np.ones((n, 1))
@@ -47,7 +51,7 @@ u_th = np.random.rand(n_pts_gripper, 1)
 u_r = np.random.rand(n_pts_gripper, 1)
 x = radius * np.sqrt(u_r) * np.cos(2 * np.pi * u_th)
 y = radius * np.sqrt(u_r) * np.sin(2 * np.pi * u_th) + 1.1
-z = np.random.rand(n_pts_gripper, 1) * 0.01 + 0.76
+z = np.random.rand(n_pts_gripper, 1) * 0.05 + 0.725
 # z = np.ones((n_pts, 1)) * 0.76
 ref_query_pts = np.hstack([x, y, z])
 ref_query_pts = ref_query_pts - pcd1_mean
@@ -130,6 +134,9 @@ opt_model_input['coords'] = X
 mi_point_cloud = []
 for ii in range(M):
     # mi_point_cloud.append(torch.from_numpy(self.pcd2[:self.n_pts]).float().to(self.dev))
+    # if ii % 5 == 0:
+    #     idx = torch.randperm(pcd1.shape[0])
+    #     pcd1 = pcd1[idx]
     mi_point_cloud.append(torch.from_numpy(pcd1[:n_pts]).float().to(dev))
 mi_point_cloud = torch.stack(mi_point_cloud, 0)
 opt_model_input['point_cloud'] = mi_point_cloud
@@ -137,12 +144,6 @@ opt_latent = model.extract_latent(opt_model_input).detach()
 
 loss_values = []
 vid_plot_idx = None
-
-# run optimization
-pcd_traj_list = {}
-for jj in range(M):
-    pcd_traj_list[jj] = []
-    pcd_traj_list[jj].append(np.mean(X[jj].detach().cpu().numpy(), axis=0))
 
 for i in range(opt_iterations):
     T_mat = torch_util.angle_axis_to_rotation_matrix(rot).squeeze()
