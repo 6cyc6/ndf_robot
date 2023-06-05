@@ -36,7 +36,7 @@ class NDFGraspGeneratorSide:
         self.z = 0.1
 
         # pcd sampled
-        dir_mesh = BASE_DIR + '/data/scaled_2.5_2.5_4.obj'
+        dir_mesh = BASE_DIR + '/data/scaled_25_25_4.obj'
         mesh1 = trimesh.load(dir_mesh, process=False)
         pcd_sampled = mesh1.sample(5000)
         self.pcd_mean_sampled = np.mean(pcd_sampled, axis=0)

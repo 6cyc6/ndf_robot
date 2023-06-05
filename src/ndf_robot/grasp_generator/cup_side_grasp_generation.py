@@ -115,7 +115,7 @@ if __name__ == '__main__':
 
     ndf_alignment = NDFGraspGeneratorSide(model, pcd1, pcd2, pcd3, pcd4, grasp_ref, obj_mat)
     ndf_alignment.sample_grasps()
-    ndf_alignment.save_grasps(filename="0")
+    ndf_alignment.save_grasps(filename="1")
 
     # ps.init()
     # ps.set_up_dir("z_up")
