@@ -296,8 +296,8 @@ class DecoderInner(nn.Module):
         if self.return_features:
             #acts = torch.cat(acts, dim=-1)
             if self.acts == 'all':
-                # acts = torch.cat(acts, dim=-1)
-                acts = torch.cat((acts[0], acts[1], acts[2], acts[3], acts[4], acts[5]), dim=-1)
+                acts = torch.cat(acts, dim=-1)
+                # acts = torch.cat((acts[0], acts[1], acts[2], acts[3], acts[4], acts[5]), dim=-1)
                 # acts = last_act
                 # acts = torch.cat(acts_inp_first_rn, dim=-1)
             elif self.acts == 'inp':
