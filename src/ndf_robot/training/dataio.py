@@ -215,9 +215,9 @@ class JointOccTrainDataset(Dataset):
             return res, {'occ': torch.from_numpy(labels).float()}
 
         except Exception as e:
-           print(e)
+            print(e)
         #    print(file)
-           return self.get_item(index=random.randint(0, self.__len__() - 1))
+            return self.get_item(index=random.randint(0, self.__len__() - 1))
 
     def __getitem__(self, index):
         return self.get_item(index)

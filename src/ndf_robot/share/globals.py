@@ -11,7 +11,7 @@ SHAPENET_ID_DICT['jar'] = '03593526'
 SHAPENET_ID_DICT['bowl'] = '02880940'
 
 bad_shapenet_mugs_data = np.load(osp.join(get_ndf_assets(), 'bad_mugs_all.npz'))
-bad_shapenet_bowls_data = np.load(osp.join(get_ndf_assets(), 'bad_bowls.npz'))
+bad_shapenet_bowls_data = np.load(osp.join(get_ndf_assets(), 'bad_bowls_all.npz'))
 bad_shapenet_bottles_data = np.load(osp.join(get_ndf_assets(), 'bad_bottles_all.npz'))
 
 bad_shapenet_mug_ids_list = bad_shapenet_mugs_data['bad_ids'].tolist()

@@ -21,6 +21,15 @@ if __name__ == '__main__':
     ref_id_2 = 50
     ref_id_3 = 40
 
+    dir_test = BASE_DIR + '/data/1.npz'
+    data = np.load(dir_test, allow_pickle=True)
+    pcd = data["pcd"]
+
+    ps.init()
+    ps.set_up_dir("z_up")
+    ps.register_point_cloud("1", pcd, radius=0.005, enabled=True)
+    ps.show()
+
     # load data
     # dir_1 = BASE_DIR + '/data/data_1.npz'
     # dir_2 = BASE_DIR + '/data/data_2.npz'

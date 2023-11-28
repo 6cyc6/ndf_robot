@@ -6,7 +6,8 @@ import time
 import pybullet as p
 import copy
 
-from ndf_robot.utils import util, trimesh_util
+from ndf_robot.utils import util, trimesh_util, path_util
+
 
 # some helpers
 def soft_grasp_close(robot, joint_id2, force=100):
@@ -113,21 +114,34 @@ def get_ee_offset(ee_pose):
     return dz_vec.tolist() + [0, 0, 0, 1]
 
 
-def process_demo_data_rack(grasp_data, place_data, cfg, gaussian_scale=0.1):
+def process_demo_data_rack(grasp_data, place_data, cfg, obj_class, gaussian_scale=0.1):
     data = grasp_data
+
+    # obj_id = data["shapenet_id"]
+    # mesh_path = osp.join(path_util.get_ndf_obj_descriptions(), f"{obj_class}_centered_obj", str(obj_id), "models/model_128_df.obj")
+    # obj_mesh = trimesh.load_mesh(mesh_path, process=False)
+    # obj_mesh.apply_scale(0.3)
+    #
+    # trans_mat = util.matrix_from_pose(util.list2pose_stamped(data['obj_pose_world']))
+    # obj_mesh.apply_transform(trans_mat)
+    # pts = obj_mesh.sample(10000)
+
     demo_obj_pts = data['object_pointcloud']  # observed shape point cloud at start
+    # demo_obj_pts = copy.deepcopy(pts)
     demo_pts_mean = np.mean(demo_obj_pts, axis=0)
     inliers = np.where(np.linalg.norm(demo_obj_pts - demo_pts_mean, 2, 1) < 0.2)[0]
     demo_obj_pts = demo_obj_pts[inliers]
 
     demo_gripper_pts_rs = data['gripper_pts']  # points we use to represent the gripper at their canonical pose position shown in the demonstration
+    # demo_gripper_pts_rs = demo_gripper_pts
     demo_gripper_pcd_rs = trimesh.PointCloud(demo_gripper_pts_rs)
     demo_ee_mat = util.matrix_from_pose(util.list2pose_stamped(data['ee_pose_world']))  # end-effector pose before grasping
     demo_gripper_pcd_rs.apply_transform(demo_ee_mat)
     demo_gripper_pts_rs = np.asarray(demo_gripper_pcd_rs.vertices) # points we use to represent the gripper at their canonical pose position shown in the demonstration
 
     # demo_gripper_pts = data['gripper_pts_gaussian'] * gaussian_scale # query points for the gripper (Gaussian distributed)
-    demo_gripper_pts = data['gripper_pts_uniform'] # query points for the gripper (Uniform distributed)
+    demo_gripper_pts = data['gripper_pts_uniform'] # query points for the gripper (Uniform distributed)  original
+    # demo_gripper_pts = demo_gripper_pts  # query points for the gripper (Uniform distributed)
     demo_gripper_pcd = trimesh.PointCloud(demo_gripper_pts)
     demo_ee_mat = util.matrix_from_pose(util.list2pose_stamped(data['ee_pose_world']))  # end-effector pose before grasping
     demo_gripper_pcd.apply_transform(demo_ee_mat)
@@ -135,6 +149,7 @@ def process_demo_data_rack(grasp_data, place_data, cfg, gaussian_scale=0.1):
 
     # place_data = np.load(place_demo_fn, allow_pickle=True)
     place_demo_obj_pts = place_data['object_pointcloud']  # observed shape points at start
+    # place_demo_obj_pts = copy.deepcopy(pts)
     place_demo_pts_mean = np.mean(place_demo_obj_pts, axis=0)
     inliers = np.where(np.linalg.norm(place_demo_obj_pts - place_demo_pts_mean, 2, 1) < 0.2)[0]
     place_demo_obj_pts = place_demo_obj_pts[inliers]
@@ -148,6 +163,12 @@ def process_demo_data_rack(grasp_data, place_data, cfg, gaussian_scale=0.1):
             util.list2pose_stamped(pick_demo_obj_pose)))  # ground truth relative transformation in demo
     place_demo_obj_pcd.apply_transform(place_demo_obj_pose_rel_mat)  # start shape points transformed into goal configuration
     place_demo_obj_pts = np.asarray(place_demo_obj_pcd.vertices)  # shape points at goal
+
+    # obj_mesh = trimesh.load_mesh(mesh_path, process=False)
+    # obj_mesh.apply_scale(0.3)
+    # trans_mat = util.matrix_from_pose(util.list2pose_stamped(data['obj_pose_world']))
+    # obj_mesh.apply_transform(trans_mat)
+    # pts = obj_mesh.sample(10000)
 
     place_demo_rack_pts_rs = place_data['rack_pointcloud_gt']  # points used to represent the rack in canonical pose
     place_demo_rack_pcd_rs = trimesh.PointCloud(place_demo_rack_pts_rs)
@@ -173,6 +194,7 @@ def process_demo_data_rack(grasp_data, place_data, cfg, gaussian_scale=0.1):
     
     # place_demo_rack_pts = place_demo_rack_bb_pts
     place_demo_rack_pts = uniform_place_demo_rack_pts
+    # place_demo_rack_pts = place_demo_rack_pts_obs
 
     target_info = dict(
         demo_query_pts=demo_gripper_pts, 
@@ -195,7 +217,7 @@ def process_demo_data_rack(grasp_data, place_data, cfg, gaussian_scale=0.1):
     return target_info, rack_target_info, shapenet_id
 
 
-def process_demo_data_shelf(grasp_data, place_data, cfg):
+def process_demo_data_shelf(grasp_data, place_data, cfg, obj_class):
     data = grasp_data
     demo_obj_pts = data['object_pointcloud']  # observed shape point cloud at start
     demo_pts_mean = np.mean(demo_obj_pts, axis=0)
@@ -210,6 +232,12 @@ def process_demo_data_shelf(grasp_data, place_data, cfg):
 
     # demo_gripper_pts = data['gripper_pts_gaussian'] * gaussian_scale # query points for the gripper (Gaussian distributed)
     demo_gripper_pts = data['gripper_pts_uniform'] # query points for the gripper (Uniform distributed)
+
+    # query_y = np.random.uniform(-0.02, 0.02, 500)
+    # query_x = np.random.uniform(-0.04, 0.04, 500)
+    # query_z = np.random.uniform(-0.06 + 0.015, 0.000 + 0.015, 500)
+    # demo_gripper_pts = np.vstack([query_x, query_y, query_z]).T
+
     demo_gripper_pcd = trimesh.PointCloud(demo_gripper_pts)
     demo_ee_mat = util.matrix_from_pose(util.list2pose_stamped(data['ee_pose_world']))  # end-effector pose before grasping
     demo_gripper_pcd.apply_transform(demo_ee_mat)
@@ -273,6 +301,11 @@ def process_demo_data_shelf(grasp_data, place_data, cfg):
 def process_xq_data(grasp_data, place_data, shelf=True):
     optimizer_gripper_pts = grasp_data['gripper_pts_uniform']
 
+    # query_y = np.random.uniform(-0.02, 0.02, 500)
+    # query_x = np.random.uniform(-0.04, 0.04, 500)
+    # query_z = np.random.uniform(-0.06 + 0.015, 0.000 + 0.015, 500)
+    # optimizer_gripper_pts = np.vstack([query_x, query_y, query_z]).T
+
     uniform_place_demo_rack_pts = place_data['rack_pointcloud_uniform']
     uniform_place_demo_rack_pcd = trimesh.PointCloud(uniform_place_demo_rack_pts)
     uniform_place_demo_rack_pose_mat = util.matrix_from_pose(util.list2pose_stamped(place_data['rack_pose_world']))
@@ -294,6 +327,11 @@ def process_xq_data(grasp_data, place_data, shelf=True):
 def process_xq_rs_data(grasp_data, place_data, shelf=True):
     optimizer_gripper_pts_rs = grasp_data['gripper_pts']
 
+    # query_y = np.random.uniform(-0.02, 0.02, 500)
+    # query_x = np.random.uniform(-0.04, 0.04, 500)
+    # query_z = np.random.uniform(-0.06 + 0.015, 0.000 + 0.015, 500)
+    # optimizer_gripper_pts_rs = np.vstack([query_x, query_y, query_z]).T
+
     place_demo_rack_pts_rs = place_data['rack_pointcloud_gt']  # points used to represent the rack in canonical pose
     place_demo_rack_pcd_rs = trimesh.PointCloud(place_demo_rack_pts_rs)
     place_demo_rack_pose_mat = util.matrix_from_pose(util.list2pose_stamped(place_data['rack_pose_world']))
@@ -310,6 +348,7 @@ def process_xq_rs_data(grasp_data, place_data, shelf=True):
         return optimizer_gripper_pts_rs, place_demo_rack_pts_rs, place_demo_shelf_pts_rs
     else:
         return optimizer_gripper_pts_rs, place_demo_rack_pts_rs, None
+
 
 def post_process_grasp_point(pre_grasp_ee_pose, target_obj_pcd, thin_feature=True, grasp_viz=False, grasp_dist_thresh=0.0025):
     grasp_pt = pre_grasp_ee_pose[:3]
@@ -419,3 +458,35 @@ def post_process_grasp_point(pre_grasp_ee_pose, target_obj_pcd, thin_feature=Tru
         scene.add_geometry([grasp_sph, new_grasp_sph])
         scene.show()
     return new_grasp_pt
+
+
+def ibs_post_process(grasp_ibs_list, place_ibs_list, num_demo):
+    # postprocess ibs pts
+    # grasp ibs
+    if num_demo == 1:
+        grasp_ibs_pts = grasp_ibs_list[0]
+    else:
+        grasp_ibs_pts = np.concatenate(grasp_ibs_list[: num_demo])
+    tree = KDTree(grasp_ibs_pts)
+    ds, _ = tree.query(grasp_ibs_pts, k=num_demo + 1, workers=5)
+    avg_ds = 1 / (ds.sum(axis=1) / num_demo + 1e-10)
+    pts_weights = avg_ds / avg_ds.sum()
+
+    idx = np.arange(grasp_ibs_pts.shape[0])
+    idx_pts = np.random.choice(idx, 500, p=pts_weights, replace=False)
+    optimizer_gripper_ibs_pts = grasp_ibs_pts[idx_pts]
+
+    # place ibs
+    if num_demo == 1:
+        place_ibs_pts = place_ibs_list[0]
+    else:
+        place_ibs_pts = np.concatenate(place_ibs_list[: num_demo])
+    tree = KDTree(place_ibs_pts)
+    ds, _ = tree.query(grasp_ibs_pts, k=num_demo + 1, workers=5)
+    avg_ds = 1 / (ds.sum(axis=1) / num_demo + 1e-10)
+    pts_weights = avg_ds / avg_ds.sum()
+    idx = np.arange(place_ibs_pts.shape[0])
+    idx_pts = np.random.choice(idx, 500, p=pts_weights, replace=False)
+    place_optimizer_ibs_pts = place_ibs_pts[idx_pts]
+
+    return optimizer_gripper_ibs_pts, place_optimizer_ibs_pts

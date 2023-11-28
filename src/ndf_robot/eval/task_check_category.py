@@ -11,25 +11,26 @@ from scipy.spatial.transform import Rotation
 
 from ndf_robot.eval.ndf_paritial_map import NDFPartialMap
 from ndf_robot.utils import path_util, torch_util
-import ndf_robot.model.vnn_occupancy_net_pointnet_dgcnn as vnn_occupancy_network
+# import ndf_robot.model.vnn_occupancy_net_pointnet_dgcnn as vnn_occupancy_network
+import ndf_robot.model.vnn_occupancy_net_pointnet_dgcnn_nift as vnn_occupancy_network
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(BASE_DIR))
 
 if __name__ == '__main__':
-    # ref_id_1 = 0
-    # ref_id_2 = 73
-    # ref_id_3 = 36
-
     ref_id_1 = 0
-    ref_id_2 = 50
+    ref_id_2 = 73
     ref_id_3 = 36
 
+    # ref_id_1 = 0
+    # ref_id_2 = 50
+    # ref_id_3 = 36
+
     # load data
-    # dir_1 = BASE_DIR + '/data/data_1.npz'
-    # dir_2 = BASE_DIR + '/data/data_2.npz'
-    dir_2 = BASE_DIR + '/data/data_bottle_1.npz'
-    dir_1 = BASE_DIR + '/data/data_bottle_2.npz'
+    dir_1 = BASE_DIR + '/data/data_1.npz'
+    dir_2 = BASE_DIR + '/data/data_2.npz'
+    # dir_2 = BASE_DIR + '/data/data_bottle_1.npz'
+    # dir_1 = BASE_DIR + '/data/data_bottle_2.npz'
     data_1 = np.load(dir_1, allow_pickle=True)
     data_2 = np.load(dir_2, allow_pickle=True)
     pcd1 = data_1["pcd"]
@@ -64,16 +65,19 @@ if __name__ == '__main__':
     np.random.shuffle(pcd1)
     np.random.shuffle(pcd2)
     # # show point clouds
-    tpcd1 = trimesh.PointCloud(pcd1)
-    tpcd2 = trimesh.PointCloud(pcd2)
-    tpcd1.show()
-    tpcd2.show()
+    # tpcd1 = trimesh.PointCloud(pcd1)
+    # tpcd2 = trimesh.PointCloud(pcd2)
+    # tpcd1.show()
+    # tpcd2.show()
 
     # load model
-    model_path = osp.join(path_util.get_ndf_model_weights(), 'ndf_demo_mug_weights.pth')
+    # model_path = osp.join(path_util.get_ndf_model_weights(), 'ndf_demo_mug_weights.pth')
     # model_path = osp.join(path_util.get_ndf_model_weights(), 'multi_category_weights.pth')
-    model = vnn_occupancy_network.VNNOccNet(latent_dim=256, model_type='pointnet', return_features=True,
-                                            sigmoid=True).cuda()
+    # model = vnn_occupancy_network.VNNOccNet(latent_dim=256, model_type='pointnet', return_features=True,
+    #                                         sigmoid=True).cuda()
+
+    model_path = osp.join(path_util.get_ndf_model_weights(), 'nift_mug.pth')
+    model = vnn_occupancy_network.VNNOccNet(latent_dim=256, o_dim=5, return_features=True).cuda()
     model.load_state_dict(torch.load(model_path))
 
     # device
@@ -244,15 +248,33 @@ if __name__ == '__main__':
 
     probs_1_ = np.repeat(probs_1, 4)
     probs_2_ = np.repeat(probs_2, 4)
+
+    # reference
+    coords = np.concatenate((gripper_control_points, np.ones((7, 1))), axis=1)
+    coords = grasps1[ref_id_2] @ coords.T
+    coords = coords[0:3, :]
+    coords = coords.T
+    nodes = coords
+
     ps.init()
     ps.set_up_dir("z_up")
-    ps.register_point_cloud("query_1", query_pts_vis_1 + mean_1, radius=0.005, enabled=True)
+
+    ps.register_curve_network("edge_x_ref", nodes[[0, 1]], np.array([[0, 1]]), enabled=True, radius=0.002,
+                              color=(1, 0, 0))
+    ps.register_curve_network("edge_y_ref", nodes[[2, 5]], np.array([[0, 1]]), enabled=True, radius=0.002,
+                              color=(1, 0, 0))
+    ps.register_curve_network("edge_z_ref", nodes[[2, 3]], np.array([[0, 1]]), enabled=True, radius=0.002,
+                              color=(1, 0, 0))
+    ps.register_curve_network("edge_ref", nodes[[5, 6]], np.array([[0, 1]]), enabled=True, radius=0.002,
+                              color=(1, 0, 0))
+
+    # ps.register_point_cloud("query_1", query_pts_vis_1 + mean_1, radius=0.005, enabled=True)
     ps.register_point_cloud("query_2", query_pts_vis_2 + mean_1, radius=0.005, enabled=True)
     ps.register_point_cloud("pcd_1", pcd1[:2000] + mean_1, radius=0.005, enabled=True)
-    ps.register_point_cloud("pcd_2", pcd2[:2000] + mean_2 + bias, radius=0.005, enabled=True)
+    # ps.register_point_cloud("pcd_2", pcd2[:2000] + mean_2 + bias, radius=0.005, enabled=True)
     ps.register_point_cloud("pcd_3", pcd2[:2000] + mean_2 + bias * 2, radius=0.005, enabled=True)
-    ps3 = ps.register_curve_network("gripper_1", all_nodes_1, all_edges, radius=0.002, enabled=True)
-    ps3.add_scalar_quantity("probs", probs_1_, defined_on='edges', cmap='coolwarm', enabled=True)
+    # ps3 = ps.register_curve_network("gripper_1", all_nodes_1, all_edges, radius=0.002, enabled=True)
+    # ps3.add_scalar_quantity("probs", probs_1_, defined_on='edges', cmap='coolwarm', enabled=True)
     ps4 = ps.register_curve_network("gripper_2", all_nodes_2, all_edges, radius=0.002, enabled=True)
     ps4.add_scalar_quantity("probs", probs_2_, defined_on='edges', cmap='coolwarm', enabled=True)
     ps.show()

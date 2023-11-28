@@ -33,7 +33,7 @@ def worker_gen(child_conn, global_dict, worker_flag_dict, seed, worker_id):
             break
         if msg == "INIT":
             np.random.seed(seed)
-            pb_client = create_pybullet_client(gui=False, opengl_render=True, realtime=True)
+            pb_client = create_pybullet_client(gui=False, opengl_render=False, realtime=True)
 
             # we need to turn off file caching so memory doesn't keep growing
             p.setPhysicsEngineParameter(enableFileCaching=0, physicsClientId=pb_client.get_client_id())
@@ -141,7 +141,7 @@ def worker_gen(child_conn, global_dict, worker_flag_dict, seed, worker_id):
                 distractor_env.initialize_object_states(keep_away_region=pos[:-1])
                 time.sleep(1.0)
 
-            # load the object and change dynamics so it doesn't move as much 
+            # load the object and change dynamics so it doesn't move as much
             obj_id = pb_client.load_geom(
                 'mesh', 
                 mass=0.01, 
@@ -179,6 +179,9 @@ def worker_gen(child_conn, global_dict, worker_flag_dict, seed, worker_id):
                     pose_frame_target=cam_pose_world
                 )
                 obj_pose_camera_np = util.pose_stamped2np(obj_pose_camera)
+
+                ext = cam.cam_ext_mat
+                obj_pose = np.linalg.inv(ext) @ util.matrix_from_pose(obj_pose_world)
 
                 rgb, depth, seg = cam.get_images(get_rgb=True, get_depth=True, get_seg=True)
                 pts_raw, _ = cam.get_pcd(in_world=True, rgb_image=rgb, depth_image=depth, depth_min=0, depth_max=np.inf)

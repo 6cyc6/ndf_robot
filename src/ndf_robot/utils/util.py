@@ -159,7 +159,7 @@ def C3(theta):
 
 
 def unwrap(angles, min_val=-np.pi, max_val=np.pi):
-    if type(angles) is not 'ndarray':
+    if type(angles) != 'ndarray':
         angles = np.array(angles)
     angles_unwrapped = []
     for counter in range(angles.shape[0]):
@@ -687,6 +687,23 @@ def transform_pcd(pcd, transform):
         pcd = np.concatenate((pcd, np.ones((pcd.shape[0], 1))), axis=1)
     pcd_new = np.matmul(transform, pcd.T)[:-1, :].T
     return pcd_new
+
+
+def random_pose():
+    # normal_vec = np.array([0, np.cos(-np.pi / 6), np.sin(-np.pi / 6)])
+    # a = R.from_matrix(np.array([[1, 0, 0],
+    #                             [0, 0, -1],
+    #                             [0, 1, 0]]))
+    # quat_0 = a.as_quat()
+    #
+    # r = R.random()
+    # quat = r.as_quat()
+    # sym_axis = r.as_matrix()[:, -1]
+    # if np.dot(sym_axis, normal_vec) > 0:
+    #     quat[:3] *= -1
+    #
+    # return quat_multiply(quat, quat_0)
+    return R.random().as_quat()
 
 
 # import healpy as hp

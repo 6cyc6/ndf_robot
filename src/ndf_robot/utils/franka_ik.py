@@ -12,7 +12,7 @@ from pybullet_tools.utils import add_data_path, connect, dump_body, disconnect, 
     get_movable_joints, get_sample_fn, set_joint_positions, get_joint_name, LockRenderer, link_from_name, get_link_pose, \
     multiply, Pose, Point, interpolate_poses, HideOutput, draw_pose, set_camera_pose, load_pybullet, \
     assign_link_colors, add_line, point_from_pose, remove_handles, BLUE, pairwise_collision, set_client, get_client, pairwise_link_collision, \
-    plan_joint_motion
+    plan_joint_motion, get_limits_fn
 
 from pybullet_tools.ikfast.franka_panda.ik import PANDA_INFO, FRANKA_URDF
 FRANKA_URDF = osp.join(pb_planning_src, FRANKA_URDF)
@@ -85,6 +85,8 @@ class FrankaIK:
 
         self._grasp_target_to_ee = [0, 0, -0.105, 0, 0, 0, 1]
         self._ee_to_grasp_target = [0, 0, 0.105, 0, 0, 0, 1]
+
+        self.limit_fn = get_limits_fn(self.robot, [0, 1, 2, 3, 4, 5, 6], verbose=True)
 
     def set_jpos(self, jnts):
         set_joint_positions(self.robot, self.ik_joints, jnts)
@@ -197,10 +199,12 @@ class FrankaIK:
         for conf in confs:
             set_joint_positions(self.robot, self.ik_joints, conf)
             collision_info = self.check_collision()
-            if not collision_info[0]:
+            if not collision_info[0] or not self.limit_fn(conf):
                 return conf 
             else:
                 if verbose:
+                    # if limits_fn(conf):
+                    #     print('Avoid joint limit.')
                     print('Collision with body: %s' % collision_info[1])
         print('Failed to get feasible IK')
         return None
@@ -208,7 +212,7 @@ class FrankaIK:
     def plan_joint_motion(self, start, goal, alg='rrt_star', max_time=5.0):
         self.set_jpos(start)
         plan = plan_joint_motion(
-            self.robot, self.ik_joints, goal, obstacles=self.obstacle_dict.values(), self_collisions=True, 
+            self.robot, self.ik_joints, goal, obstacles=self.obstacle_dict.values(), self_collisions=False,
             disabled_collisions=set(self.panda_ignore_pairs), algorithm=alg, max_time=max_time)
         return plan
 

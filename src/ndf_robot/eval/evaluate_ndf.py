@@ -7,6 +7,7 @@ import torch
 import argparse
 import shutil
 
+import polyscope as ps
 import pybullet as p
 
 from airobot import Robot
@@ -15,9 +16,14 @@ from airobot.utils import common
 from airobot import log_info
 from airobot.utils.common import euler2quat
 
+from scipy.spatial.transform import Rotation as R
+
 import ndf_robot.model.vnn_occupancy_net_pointnet_dgcnn as vnn_occupancy_network
+from ndf_robot.model.vnn_occ_scf_net import VNNOccScfNetMulti
+from ndf_robot.model.vnn_occ_sdf_scf_net import VNNOccSdfScfNetMulti, VNNOccSdfScfNetShared
+from ndf_robot.model.vnn_scf_net import VNNScfNet
 from ndf_robot.utils import util, trimesh_util
-from ndf_robot.utils.util import np2img
+from ndf_robot.utils.util import np2img, random_pose, matrix_from_pose
 
 from ndf_robot.opt.optimizer import OccNetOptimizer
 from ndf_robot.robot.multicam import MultiCams
@@ -27,9 +33,10 @@ from ndf_robot.utils import path_util
 from ndf_robot.share.globals import bad_shapenet_mug_ids_list, bad_shapenet_bowls_ids_list, bad_shapenet_bottles_ids_list
 from ndf_robot.utils.franka_ik import FrankaIK
 from ndf_robot.utils.eval_gen_utils import (
-    soft_grasp_close, constraint_grasp_close, constraint_obj_world, constraint_grasp_open, 
+    soft_grasp_close, constraint_grasp_close, constraint_obj_world, constraint_grasp_open,
     safeCollisionFilterPair, object_is_still_grasped, get_ee_offset, post_process_grasp_point,
     process_demo_data_rack, process_demo_data_shelf, process_xq_data, process_xq_rs_data, safeRemoveConstraint,
+    ibs_post_process,
 )
 
 
@@ -94,18 +101,59 @@ def main(args, global_dict):
     preplace_offset_tf = util.list2pose_stamped(cfg.PREPLACE_OFFSET_TF)
 
     if args.dgcnn:
-        model = vnn_occupancy_network.VNNOccNet(
-            latent_dim=256, 
-            model_type='dgcnn',
-            return_features=True, 
-            sigmoid=True,
-            acts=args.acts).cuda()
+        if args.model == 'occ':
+            model = vnn_occupancy_network.VNNOccNet(
+                latent_dim=256,
+                model_type='dgcnn',
+                return_features=True,
+                sigmoid=True,
+                acts=args.acts).cuda()
+        elif args.model == 'occscf':
+            model = VNNOccScfNetMulti(
+                latent_dim=256,
+                model_type='dgcnn',
+                return_features=True,
+                sigmoid=True,
+                acts=args.acts).cuda()
+        else:
+            model = VNNOccSdfScfNetMulti(
+                latent_dim=256,
+                model_type='dgcnn',
+                return_features=True,
+                sigmoid=True,
+                acts=args.acts).cuda()
     else:
-        model = vnn_occupancy_network.VNNOccNet(
-            latent_dim=256, 
-            model_type='pointnet',
-            return_features=True, 
-            sigmoid=True).cuda()
+        if args.model == 'occ':
+            model = vnn_occupancy_network.VNNOccNet(
+                latent_dim=256,
+                model_type='pointnet',
+                return_features=True,
+                sigmoid=True).cuda()
+        elif args.model == 'occscf':
+            model = VNNOccScfNetMulti(
+                latent_dim=256,
+                model_type='pointnet',
+                return_features=True,
+                sigmoid=True,
+                acts=args.acts).cuda()
+        elif args.model == 'scf':
+            model = VNNScfNet(
+                latent_dim=256,
+                model_type='pointnet',
+                return_features=True,
+                sigmoid=False).cuda()
+        else:
+            model = VNNOccSdfScfNetMulti(
+                latent_dim=256,
+                model_type='pointnet',
+                return_features=True,
+                sigmoid=True).cuda()
+            # model = VNNOccSdfScfNetShared(
+            #     latent_dim=256,
+            #     model_type='pointnet',
+            #     return_features=True,
+            #     sigmoid=True,
+            #     acts=args.acts).cuda()
 
     if not args.random:
         checkpoint_path = global_dict['vnn_checkpoint_path']
@@ -123,7 +171,8 @@ def main(args, global_dict):
     assert len(demo_filenames), 'No demonstrations found in path: %s!' % global_dict['demo_load_dir']
 
     # strip the filenames to properly pair up each demo file
-    grasp_demo_filenames_orig = [osp.join(global_dict['demo_load_dir'], fn) for fn in demo_filenames if 'grasp_demo' in fn]  # use the grasp names as a reference
+    grasp_demo_filenames_orig = [osp.join(global_dict['demo_load_dir'], fn) for fn in demo_filenames
+                                 if 'grasp_demo' in fn and 'ibs' not in fn]  # use the grasp names as a reference
 
     place_demo_filenames = []
     grasp_demo_filenames = []
@@ -166,9 +215,15 @@ def main(args, global_dict):
     grasp_data_list = []
     place_data_list = []
     demo_rel_mat_list = []
+    grasp_ibs_list = []
+    place_ibs_list = []
+    grasp_recon_list = []
+    place_recon_list = []
 
     # load all the demo data and look at objects to help decide on query points
     for i, fname in enumerate(grasp_demo_filenames):
+        # if i == 2:
+        #     break
         print('Loading demo from fname: %s' % fname)
         grasp_demo_fn = grasp_demo_filenames[i]
         place_demo_fn = place_demo_filenames[i]
@@ -201,9 +256,9 @@ def main(args, global_dict):
                 place_optimizer_pts_rs = rack_optimizer_gripper_pts_rs
 
         if cfg.DEMOS.PLACEMENT_SURFACE == 'shelf':
-            target_info, rack_target_info, shapenet_id = process_demo_data_shelf(grasp_data, place_data, cfg=None)
+            target_info, rack_target_info, shapenet_id = process_demo_data_shelf(grasp_data, place_data, cfg=None, obj_class=obj_class)
         else:
-            target_info, rack_target_info, shapenet_id = process_demo_data_rack(grasp_data, place_data, cfg=None)
+            target_info, rack_target_info, shapenet_id = process_demo_data_rack(grasp_data, place_data, cfg=None, obj_class=obj_class)
 
         if cfg.DEMOS.PLACEMENT_SURFACE == 'shelf':
             rack_target_info['demo_query_pts'] = place_optimizer_pts
@@ -211,19 +266,89 @@ def main(args, global_dict):
         demo_rack_target_info_list.append(rack_target_info)
         demo_shapenet_ids.append(shapenet_id)
 
-    place_optimizer = OccNetOptimizer(
-        model,
-        query_pts=place_optimizer_pts,
-        query_pts_real_shape=place_optimizer_pts_rs,
-        opt_iterations=args.opt_iterations)
+        # demo_pts = rack_target_info['demo_query_pts_real_shape']
+        # demo_shape_pts_world = rack_target_info['demo_obj_pts']
+        #
+        # # ibs = pyibs.IBS(demo_pts, demo_shape_pts_world, n=1000)
+        # # pts = ibs.sample_points()
+        #
+        # # vis
+        # ps.init()
+        # ps.set_up_dir("z_up")
+        #
+        # ps.register_point_cloud("obj", demo_shape_pts_world, radius=0.005, color=[0, 0, 1], enabled=True)
+        # ps.register_point_cloud("demo", demo_pts, radius=0.005, color=[1, 0, 1], enabled=True)
+        # ps.register_point_cloud("rs", place_optimizer_pts, radius=0.005, color=[1, 1, 1], enabled=True)
+        # # ps.register_point_cloud("gripper", pts_mesh, radius=0.005, color=[1, 0, 0], enabled=True)
+        # # ps.register_point_cloud("ibs", pts, radius=0.005, color=[0, 1, 0], enabled=True)
+        # ps.show()
 
-    grasp_optimizer = OccNetOptimizer(
-        model,
-        query_pts=optimizer_gripper_pts,
-        query_pts_real_shape=optimizer_gripper_pts_rs,
-        opt_iterations=args.opt_iterations)
+        if args.ibs:
+            # load ibs
+            # grasp
+            if args.recon:
+                grasp_ibs_fn = grasp_demo_fn.split('.')[0] + '_recon_ibs.npz'
+            else:
+                grasp_ibs_fn = grasp_demo_fn.split('.')[0] + '_ibs.npz'
+            grasp_ibs_data = np.load(grasp_ibs_fn, allow_pickle=True)
+            gripper_ibs_pts = grasp_ibs_data["ibs"]
+            ones = np.ones((gripper_ibs_pts.shape[0], 1))
+            pts_ones = np.hstack([gripper_ibs_pts, ones])
+            trans_ibs_pts = grasp_ibs_data["trans_mat"] @ pts_ones.T
+            gripper_ibs_pts = trans_ibs_pts[:3, :].T
+
+            grasp_ibs_list.append(gripper_ibs_pts)
+
+            if args.recon:
+                recon_pcd = grasp_ibs_data["recon"]
+                grasp_recon_list.append(recon_pcd)
+
+            # place
+            if args.recon:
+                place_ibs_fn = place_demo_fn.split('.')[0] + '_recon_ibs.npz'
+            else:
+                place_ibs_fn = place_demo_fn.split('.')[0] + '_ibs.npz'
+            place_ibs_data = np.load(place_ibs_fn, allow_pickle=True)
+            place_ibs_pts = place_ibs_data["ibs"]
+            place_ibs_list.append(place_ibs_pts)
+
+            if args.recon:
+                recon_pcd = place_ibs_data["recon"]
+                place_recon_list.append(recon_pcd)
+
+    if args.ibs:
+        optimizer_gripper_ibs_pts, place_optimizer_ibs_pts = ibs_post_process(grasp_ibs_list, place_ibs_list, args.num_demo)
+        # optimizer_gripper_ibs_pts, place_optimizer_ibs_pts = ibs_post_process(grasp_ibs_list, place_ibs_list, 5)
+        place_optimizer = OccNetOptimizer(
+            model,
+            query_pts=place_optimizer_ibs_pts,
+            query_pts_real_shape=place_optimizer_pts_rs,
+            opt_iterations=args.opt_iterations)
+        grasp_optimizer = OccNetOptimizer(
+            model,
+            query_pts=optimizer_gripper_ibs_pts,
+            query_pts_real_shape=optimizer_gripper_pts_rs,
+            opt_iterations=args.opt_iterations,
+            grasp=True)
+        grasp_optimizer.set_demo_ibs_info(optimizer_gripper_ibs_pts)
+        place_optimizer.set_demo_ibs_info(place_optimizer_ibs_pts)
+    else:
+        place_optimizer = OccNetOptimizer(
+            model,
+            query_pts=place_optimizer_pts,
+            query_pts_real_shape=place_optimizer_pts_rs,
+            opt_iterations=args.opt_iterations)
+
+        grasp_optimizer = OccNetOptimizer(
+            model,
+            query_pts=optimizer_gripper_pts,
+            query_pts_real_shape=optimizer_gripper_pts_rs,
+            opt_iterations=args.opt_iterations)
     grasp_optimizer.set_demo_info(demo_target_info_list)
     place_optimizer.set_demo_info(demo_rack_target_info_list)
+    if args.recon:
+        grasp_optimizer.set_demo_recon_info(grasp_recon_list)
+        place_optimizer.set_demo_recon_info(place_recon_list)
 
     # get objects that we can use for testing
     test_object_ids = []
@@ -285,6 +410,7 @@ def main(args, global_dict):
         if link_id is not None:
             p.changeVisualShape(obj_id, link_id, rgbaColor=color)
 
+    ori_list = []
     viz_data_list = []
     for iteration in range(args.start_iteration, args.num_iterations):
         # load a test object
@@ -314,26 +440,31 @@ def main(args, global_dict):
 
         if args.any_pose:
             if obj_class in ['bowl', 'bottle']:
-                rp = np.random.rand(2) * (2 * np.pi / 3) - (np.pi / 3)
+                # rp = np.random.rand(2) * (2 * np.pi / 3) - (np.pi / 3)
+                rp = np.random.rand(2) * (2 * np.pi / 3) - (np.pi / 6)
                 ori = common.euler2quat([rp[0], rp[1], 0]).tolist()
             else:
-                rpy = np.random.rand(3) * (2 * np.pi / 3) - (np.pi / 3)
+                # rpy = np.random.rand(3) * (2 * np.pi / 3) - (np.pi / 3)
+                rpy = np.random.rand(3) * (2 * np.pi / 3) - (np.pi / 6)
                 ori = common.euler2quat([rpy[0], rpy[1], rpy[2]]).tolist()
 
             pos = [
                 np.random.random() * (x_high - x_low) + x_low,
                 np.random.random() * (y_high - y_low) + y_low,
                 table_z]
-            pose = pos + ori
-            rand_yaw_T = util.rand_body_yaw_transform(pos, min_theta=-np.pi, max_theta=np.pi)
-            pose_w_yaw = util.transform_pose(util.list2pose_stamped(pose), util.pose_from_matrix(rand_yaw_T))
-            pos, ori = util.pose_stamped2list(pose_w_yaw)[:3], util.pose_stamped2list(pose_w_yaw)[3:]
+            ori = random_pose()
+            # pose = pos + ori
+            # rand_yaw_T = util.rand_body_yaw_transform(pos, min_theta=-np.pi, max_theta=np.pi)
+            # pose_w_yaw = util.transform_pose(util.list2pose_stamped(pose), util.pose_from_matrix(rand_yaw_T))
+            # pos, ori = util.pose_stamped2list(pose_w_yaw)[:3], util.pose_stamped2list(pose_w_yaw)[3:]
         else:
             pos = [np.random.random() * (x_high - x_low) + x_low, np.random.random() * (y_high - y_low) + y_low, table_z]
             pose = util.list2pose_stamped(pos + upright_orientation)
             rand_yaw_T = util.rand_body_yaw_transform(pos, min_theta=-np.pi, max_theta=np.pi)
             pose_w_yaw = util.transform_pose(pose, util.pose_from_matrix(rand_yaw_T))
             pos, ori = util.pose_stamped2list(pose_w_yaw)[:3], util.pose_stamped2list(pose_w_yaw)[3:]
+
+        ori_list.append(ori)
 
         viz_dict['shapenet_id'] = obj_shapenet_id
         viz_dict['obj_obj_file'] = obj_obj_file
@@ -407,9 +538,26 @@ def main(args, global_dict):
         obj_pose_world = p.getBasePositionAndOrientation(obj_id)
         obj_pose_world = util.list2pose_stamped(list(obj_pose_world[0]) + list(obj_pose_world[1]))
         viz_dict['start_obj_pose'] = util.pose_stamped2list(obj_pose_world)
-        for i, cam in enumerate(cams.cams):
-            # if i == 2:
-                # break
+
+        # single view or multiple views
+        if args.single_view:
+            pose_mat = matrix_from_pose(obj_pose_world)
+            # print(pose_mat)
+            x = - pose_mat[0, 2]
+            y = - pose_mat[1, 2]
+            if x < 0:
+                if y < 0:
+                    cam_idx = 3
+                else:
+                    cam_idx = 2
+            else:
+                if y < 0:
+                    cam_idx = 0
+                else:
+                    cam_idx = 1
+            # i = np.random.randint(0, 4)
+            i = cam_idx
+            cam = cams.cams[i]
             # get image and raw point cloud
             rgb, depth, seg = cam.get_images(get_rgb=True, get_depth=True, get_seg=True)
             pts_raw, _ = cam.get_pcd(in_world=True, rgb_image=rgb, depth_image=depth, depth_min=0.0, depth_max=np.inf)
@@ -419,28 +567,67 @@ def main(args, global_dict):
             flat_depth = depth.flatten()
             obj_inds = np.where(flat_seg == obj_id)
             table_inds = np.where(flat_seg == table_id)
-            seg_depth = flat_depth[obj_inds[0]]  
-            
+            seg_depth = flat_depth[obj_inds[0]]
+
             obj_pts = pts_raw[obj_inds[0], :]
             obj_pcd_pts.append(util.crop_pcd(obj_pts))
-            table_pts = pts_raw[table_inds[0], :][::int(table_inds[0].shape[0]/500)]
+            table_pts = pts_raw[table_inds[0], :][::int(table_inds[0].shape[0] / 500)]
             table_pcd_pts.append(table_pts)
 
             if rack_link_id is not None:
-                rack_val = table_id + ((rack_link_id+1) << 24)
+                rack_val = table_id + ((rack_link_id + 1) << 24)
                 rack_inds = np.where(flat_seg == rack_val)
                 if rack_inds[0].shape[0] > 0:
                     rack_pts = pts_raw[rack_inds[0], :]
                     rack_pcd_pts.append(rack_pts)
-        
+
             depth_imgs.append(seg_depth)
             seg_idxs.append(obj_inds)
-        
+        else:
+            for i, cam in enumerate(cams.cams):
+                # if i == 1:
+                #     break
+                # get image and raw point cloud
+                rgb, depth, seg = cam.get_images(get_rgb=True, get_depth=True, get_seg=True)
+                pts_raw, _ = cam.get_pcd(in_world=True, rgb_image=rgb, depth_image=depth, depth_min=0.0, depth_max=np.inf)
+
+                # flatten and find corresponding pixels in segmentation mask
+                flat_seg = seg.flatten()
+                flat_depth = depth.flatten()
+                obj_inds = np.where(flat_seg == obj_id)
+                table_inds = np.where(flat_seg == table_id)
+                seg_depth = flat_depth[obj_inds[0]]
+
+                obj_pts = pts_raw[obj_inds[0], :]
+                obj_pcd_pts.append(util.crop_pcd(obj_pts))
+                table_pts = pts_raw[table_inds[0], :][::int(table_inds[0].shape[0]/500)]
+                table_pcd_pts.append(table_pts)
+
+                if rack_link_id is not None:
+                    rack_val = table_id + ((rack_link_id+1) << 24)
+                    rack_inds = np.where(flat_seg == rack_val)
+                    if rack_inds[0].shape[0] > 0:
+                        rack_pts = pts_raw[rack_inds[0], :]
+                        rack_pcd_pts.append(rack_pts)
+
+                depth_imgs.append(seg_depth)
+                seg_idxs.append(obj_inds)
+
         target_obj_pcd_obs = np.concatenate(obj_pcd_pts, axis=0)  # object shape point cloud
         target_pts_mean = np.mean(target_obj_pcd_obs, axis=0)
         inliers = np.where(np.linalg.norm(target_obj_pcd_obs - target_pts_mean, 2, 1) < 0.2)[0]
         target_obj_pcd_obs = target_obj_pcd_obs[inliers]
-        
+
+        # # vis
+        # ps.init()
+        # ps.set_up_dir("z_up")
+        #
+        # ps.register_point_cloud("occ", target_obj_pcd_obs, radius=0.005, color=[0, 1, 0], enabled=True)
+        # ps.show()
+
+        # np.savez(f"/home/ikun/master-thesis/ndf_robot/src/ndf_robot/pcd_pts/{iteration}",
+        #          pcd=target_obj_pcd_obs)
+
         if obj_class == 'mug':
             rack_color = p.getVisualShapeData(table_id)[rack_link_id][7]
             show_link(table_id, rack_link_id, rack_color)
@@ -458,7 +645,10 @@ def main(args, global_dict):
         viz_dict['start_ee_pose'] = pre_grasp_ee_pose
 
         ########################### grasp post-process #############################
-        new_grasp_pt = post_process_grasp_point(pre_grasp_ee_pose, target_obj_pcd_obs, thin_feature=(not args.non_thin_feature), grasp_viz=args.grasp_viz, grasp_dist_thresh=args.grasp_dist_thresh)
+        if args.recon:
+            new_grasp_pt = post_process_grasp_point(pre_grasp_ee_pose, grasp_optimizer.recon_shape, thin_feature=(not args.non_thin_feature), grasp_viz=args.grasp_viz, grasp_dist_thresh=args.grasp_dist_thresh)
+        else:
+            new_grasp_pt = post_process_grasp_point(pre_grasp_ee_pose, target_obj_pcd_obs, thin_feature=(not args.non_thin_feature), grasp_viz=args.grasp_viz, grasp_dist_thresh=args.grasp_dist_thresh)
         pre_grasp_ee_pose[:3] = new_grasp_pt
         pregrasp_offset_tf = get_ee_offset(ee_pose=pre_grasp_ee_pose)
         pre_pre_grasp_ee_pose = util.pose_stamped2list(
@@ -736,7 +926,7 @@ def main(args, global_dict):
             args=args.__dict__,
             global_dict=global_dict,
             cfg=util.cn2dict(cfg),
-            obj_cfg=util.cn2dict(obj_cfg)
+            obj_cfg=util.cn2dict(obj_cfg),
         )
 
         robot.pb_client.remove_body(obj_id)
@@ -779,7 +969,10 @@ if __name__ == "__main__":
     parser.add_argument('--non_thin_feature', action='store_true')
     parser.add_argument('--grasp_dist_thresh', type=float, default=0.0025)
     parser.add_argument('--start_iteration', type=int, default=0)
-
+    parser.add_argument('--single_view', action='store_true')
+    parser.add_argument('--model', type=str, default='occ')
+    parser.add_argument('--ibs', action='store_true')
+    parser.add_argument('--recon', action='store_true')
 
     args = parser.parse_args()
 

@@ -49,6 +49,7 @@ val_dataloader = DataLoader(val_dataset, batch_size=opt.batch_size, shuffle=True
                             drop_last=True, num_workers=4)
 
 model = vnn_occupancy_network.VNNOccNet(latent_dim=256).cuda()
+print(model)
 
 if opt.checkpoint_path is not None:
     model.load_state_dict(torch.load(opt.checkpoint_path))
